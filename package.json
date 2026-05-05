@@ -1,0 +1,16 @@
+{
+  "name": "clicky-windows",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Clicky for Windows (tray + overlay companion)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "lint": "node -c src/main.js && node -c src/preload.js",
+    "pack": "echo \"Packaging TBD (electron-builder)\" && exit 1"
+  },
+  "dependencies": {
+    "electron": "^35.0.0"
+  }
+}
+

@@ -20,8 +20,28 @@ See `docs/ARCHITECTURE.md`.
 
 ## Development
 
-This repo starts with docs + scaffolding. Choose an implementation path in `docs/TECH-CHOICES.md`:
-- Electron (fastest to ship; good desktopCapture + globalShortcut)
-- Tauri (leaner; more native work in Rust)
-- .NET (WPF/WinUI; native but more Windows-specific)
+This repo currently uses **Electron** (tray + overlay + OpenAI-compatible chat + Windows TTS).
 
+### Prereqs
+
+- Node.js 18+
+- Windows 10/11
+
+### Run
+
+```bash
+npm install
+npm start
+```
+
+### Configure
+
+Environment variables:
+- `CLICKY_OPENAI_COMPAT_BASE_URL` (default: `http://ai-coder:11434`)
+- `CLICKY_MODEL` (default: `qwen3.5:9b`)
+- `CLICKY_HOTKEY` (default: `Control+Alt+Space`)
+
+Notes:
+- Electron’s built-in hotkey API cannot bind modifier-only keys (so we use `Ctrl+Alt+Space`).
+- TTS is local via Windows SAPI (PowerShell + `System.Speech`).
+- STT + screenshots are TBD in this scaffold (next step).

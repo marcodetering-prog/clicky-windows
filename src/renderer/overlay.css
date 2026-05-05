@@ -1,0 +1,36 @@
+body {
+  margin: 0;
+  background: transparent;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.bubble {
+  margin: 10px;
+  padding: 10px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  color: #e6e8ef;
+  background: rgba(11, 13, 18, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(49, 130, 246, 0.95);
+  box-shadow: 0 0 10px rgba(49, 130, 246, 0.6);
+}
+
+.text {
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
