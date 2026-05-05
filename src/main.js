@@ -101,14 +101,21 @@ function togglePanel() {
   panelWindow.focus();
 }
 
-async function openAICompatibleChat({ userText }) {
+async function openAICompatibleChat({ userText, screenshotDataUrl }) {
   const config = getConfig();
 
   const url = new URL('/v1/chat/completions', config.openAICompatibleBaseURL).toString();
+  const userContent = screenshotDataUrl
+    ? [
+        { type: 'text', text: userText },
+        { type: 'image_url', image_url: { url: screenshotDataUrl } }
+      ]
+    : userText;
+
   const body = {
     model: config.model,
     stream: false,
-    messages: [{ role: 'user', content: userText }]
+    messages: [{ role: 'user', content: userContent }]
   };
 
   const response = await fetch(url, {
@@ -199,8 +206,9 @@ function createTray() {
 
 function wireIpc() {
   ipcMain.handle('clicky:getConfig', () => getConfig());
-  ipcMain.handle('clicky:chat', async (_event, { userText }) => {
-    const responseText = await openAICompatibleChat({ userText });
+  ipcMain.handle('clicky:chat', async (_event, { userText, options }) => {
+    const screenshotDataUrl = options?.screenshotDataUrl;
+    const responseText = await openAICompatibleChat({ userText, screenshotDataUrl });
     showOverlayNearCursor('speaking…');
     speakWithWindowsTTS(responseText);
     return { responseText };

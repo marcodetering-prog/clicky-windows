@@ -44,4 +44,5 @@ Environment variables:
 Notes:
 - Electron’s built-in hotkey API cannot bind modifier-only keys (so we use `Ctrl+Alt+Space`).
 - TTS is local via Windows SAPI (PowerShell + `System.Speech`).
-- STT + screenshots are TBD in this scaffold (next step).
+- Screenshots are supported and are sent to the model as `image_url` (OpenAI-compatible vision).
+- STT is still TBD (next step).

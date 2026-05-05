@@ -4,6 +4,7 @@ const inputEl = document.getElementById('input');
 const sendEl = document.getElementById('send');
 const outputEl = document.getElementById('output');
 const hintEl = document.getElementById('hint');
+const includeScreenshotEl = document.getElementById('includeScreenshot');
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -28,7 +29,12 @@ sendEl.addEventListener('click', async () => {
   outputEl.textContent = '';
 
   try {
-    const { responseText } = await window.clicky.chat(userText);
+    const shouldIncludeScreenshot = Boolean(includeScreenshotEl?.checked);
+    const screenshotDataUrl = shouldIncludeScreenshot
+      ? await window.clicky.captureScreenshotDataUrl()
+      : undefined;
+
+    const { responseText } = await window.clicky.chat(userText, { screenshotDataUrl });
     outputEl.textContent = responseText;
     setStatus('ready');
   } catch (error) {
@@ -46,4 +52,3 @@ window.clicky.onListeningChanged((isListening) => {
 boot().catch((error) => {
   outputEl.textContent = String(error?.message || error);
 });
-
