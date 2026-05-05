@@ -4,12 +4,14 @@ const { spawn } = require('child_process');
 
 const DEFAULT_OPENAI_COMPAT_BASE_URL = 'http://ai-coder:11434';
 const DEFAULT_MODEL = 'qwen3.5:9b';
+const DEFAULT_STT_LOCALE = 'en-US';
 
 function getConfig() {
   return {
     openAICompatibleBaseURL: process.env.CLICKY_OPENAI_COMPAT_BASE_URL || DEFAULT_OPENAI_COMPAT_BASE_URL,
     model: process.env.CLICKY_MODEL || DEFAULT_MODEL,
-    hotkey: process.env.CLICKY_HOTKEY || 'Control+Alt+Space'
+    hotkey: process.env.CLICKY_HOTKEY || 'Control+Alt+Space',
+    sttLocale: process.env.CLICKY_STT_LOCALE || DEFAULT_STT_LOCALE
   };
 }
 
@@ -17,6 +19,8 @@ let tray = null;
 let panelWindow = null;
 let overlayWindow = null;
 let isListening = false;
+let activeSpeechRecognitionProcess = null;
+const pendingScreenshotRequestsById = new Map();
 
 function createPanelWindow() {
   panelWindow = new BrowserWindow({
@@ -138,6 +142,100 @@ async function openAICompatibleChat({ userText, screenshotDataUrl }) {
   return message;
 }
 
+function createRequestId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+async function requestScreenshotDataUrlFromPanel() {
+  if (!panelWindow) return null;
+
+  const requestId = createRequestId();
+
+  const screenshotPromise = new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      pendingScreenshotRequestsById.delete(requestId);
+      resolve(null);
+    }, 3500);
+
+    pendingScreenshotRequestsById.set(requestId, (payload) => {
+      clearTimeout(timeout);
+      pendingScreenshotRequestsById.delete(requestId);
+      if (payload?.screenshotDataUrl) {
+        resolve(payload.screenshotDataUrl);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+
+  panelWindow.webContents.send('clicky:panelRequestScreenshot', requestId);
+  return screenshotPromise;
+}
+
+function startWindowsSpeechRecognitionOnce() {
+  const config = getConfig();
+
+  const powershellScript = [
+    '$ErrorActionPreference = "Stop";',
+    'Add-Type -AssemblyName System.Speech;',
+    `$culture = New-Object System.Globalization.CultureInfo("${config.sttLocale}");`,
+    '$recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine($culture);',
+    '$recognizer.SetInputToDefaultAudioDevice();',
+    '$grammar = New-Object System.Speech.Recognition.DictationGrammar;',
+    '$recognizer.LoadGrammar($grammar);',
+    '$recognizer.InitialSilenceTimeout = [TimeSpan]::FromSeconds(6);',
+    '$recognizer.BabbleTimeout = [TimeSpan]::FromSeconds(10);',
+    '$recognizer.EndSilenceTimeout = [TimeSpan]::FromSeconds(0.7);',
+    '$recognizer.EndSilenceTimeoutAmbiguous = [TimeSpan]::FromSeconds(1.2);',
+    '$result = $recognizer.Recognize();',
+    'if ($null -eq $result) { exit 0 }',
+    '$text = $result.Text;',
+    'Write-Output $text;'
+  ].join(' ');
+
+  return new Promise((resolve, reject) => {
+    const child = spawn('powershell', ['-NoProfile', '-Command', powershellScript], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    });
+
+    activeSpeechRecognitionProcess = child;
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf-8');
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf-8');
+    });
+
+    child.on('exit', (code) => {
+      if (activeSpeechRecognitionProcess === child) {
+        activeSpeechRecognitionProcess = null;
+      }
+
+      const transcript = stdout.trim();
+
+      if (code === 0) {
+        resolve(transcript || null);
+        return;
+      }
+
+      reject(new Error(`STT failed (exit ${code}): ${stderr.trim() || 'unknown error'}`));
+    });
+
+    child.on('error', (error) => {
+      if (activeSpeechRecognitionProcess === child) {
+        activeSpeechRecognitionProcess = null;
+      }
+      reject(error);
+    });
+  });
+}
+
 function speakWithWindowsTTS(text) {
   if (!text || !text.trim()) return;
 
@@ -173,10 +271,66 @@ function setListeningState(nextIsListening) {
   }
 }
 
+async function startPushToTalkFlow() {
+  setListeningState(true);
+  try {
+    const transcript = await startWindowsSpeechRecognitionOnce();
+    setListeningState(false);
+
+    if (!transcript) {
+      showOverlayNearCursor('no speech detected');
+      setTimeout(() => hideOverlay(), 900);
+      return;
+    }
+
+    showOverlayNearCursor('thinking…');
+    const screenshotDataUrl = await requestScreenshotDataUrlFromPanel();
+
+    const responseText = await openAICompatibleChat({
+      userText: transcript,
+      screenshotDataUrl
+    });
+
+    showOverlayNearCursor('speaking…');
+    speakWithWindowsTTS(responseText);
+
+    if (panelWindow) {
+      panelWindow.webContents.send('panel:pushToTalkResult', {
+        transcript,
+        responseText
+      });
+    }
+  } catch (error) {
+    setListeningState(false);
+    showOverlayNearCursor('stt error');
+    setTimeout(() => hideOverlay(), 900);
+    if (panelWindow) {
+      panelWindow.webContents.send('panel:pushToTalkError', {
+        errorMessage: String(error?.message || error)
+      });
+    }
+  }
+}
+
+function stopPushToTalkFlow() {
+  if (activeSpeechRecognitionProcess) {
+    try {
+      activeSpeechRecognitionProcess.kill();
+    } catch {
+      // ignore
+    }
+  }
+  setListeningState(false);
+}
+
 function registerHotkey() {
   const config = getConfig();
   const ok = globalShortcut.register(config.hotkey, () => {
-    setListeningState(!isListening);
+    if (isListening) {
+      stopPushToTalkFlow();
+      return;
+    }
+    startPushToTalkFlow();
   });
 
   if (!ok) {
@@ -212,6 +366,13 @@ function wireIpc() {
     showOverlayNearCursor('speaking…');
     speakWithWindowsTTS(responseText);
     return { responseText };
+  });
+
+  ipcMain.on('clicky:panelScreenshotResponse', (_event, payload) => {
+    const handler = pendingScreenshotRequestsById.get(payload?.requestId);
+    if (handler) {
+      handler(payload);
+    }
   });
 }
 

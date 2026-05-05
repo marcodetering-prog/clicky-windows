@@ -23,6 +23,21 @@ contextBridge.exposeInMainWorld('clicky', {
   getConfig: () => ipcRenderer.invoke('clicky:getConfig'),
   chat: (userText, options) => ipcRenderer.invoke('clicky:chat', { userText, options }),
   captureScreenshotDataUrl: () => captureCursorDisplayScreenshotDataUrl(),
+  onPanelRequestScreenshot: (handler) =>
+    ipcRenderer.on('clicky:panelRequestScreenshot', async (_event, requestId) => {
+      try {
+        const screenshotDataUrl = await captureCursorDisplayScreenshotDataUrl();
+        handler(requestId, screenshotDataUrl);
+      } catch (error) {
+        handler(requestId, null, String(error?.message || error));
+      }
+    }),
+  sendPanelScreenshotResponse: (requestId, screenshotDataUrl, errorMessage) =>
+    ipcRenderer.send('clicky:panelScreenshotResponse', { requestId, screenshotDataUrl, errorMessage }),
+  onPushToTalkResult: (handler) =>
+    ipcRenderer.on('panel:pushToTalkResult', (_event, payload) => handler(payload)),
+  onPushToTalkError: (handler) =>
+    ipcRenderer.on('panel:pushToTalkError', (_event, payload) => handler(payload)),
   onOverlayMessage: (handler) => ipcRenderer.on('overlay:setMessage', (_event, message) => handler(message)),
   onListeningChanged: (handler) => ipcRenderer.on('panel:setListening', (_event, isListening) => handler(isListening))
 });

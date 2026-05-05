@@ -49,6 +49,27 @@ window.clicky.onListeningChanged((isListening) => {
   setStatus(isListening ? 'listening…' : 'ready');
 });
 
+window.clicky.onPanelRequestScreenshot((requestId, screenshotDataUrl, errorMessage) => {
+  window.clicky.sendPanelScreenshotResponse(requestId, screenshotDataUrl, errorMessage);
+});
+
+window.clicky.onPushToTalkResult(({ transcript, responseText }) => {
+  if (transcript) {
+    inputEl.value = transcript;
+  }
+  if (responseText) {
+    outputEl.textContent = responseText;
+  }
+  setStatus('ready');
+});
+
+window.clicky.onPushToTalkError(({ errorMessage }) => {
+  if (errorMessage) {
+    outputEl.textContent = errorMessage;
+  }
+  setStatus('error');
+});
+
 boot().catch((error) => {
   outputEl.textContent = String(error?.message || error);
 });

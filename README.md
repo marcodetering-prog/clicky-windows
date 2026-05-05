@@ -45,4 +45,7 @@ Notes:
 - Electron’s built-in hotkey API cannot bind modifier-only keys (so we use `Ctrl+Alt+Space`).
 - TTS is local via Windows SAPI (PowerShell + `System.Speech`).
 - Screenshots are supported and are sent to the model as `image_url` (OpenAI-compatible vision).
-- STT is still TBD (next step).
+- STT is local via Windows Speech Recognition (`System.Speech.Recognition`) and is triggered by the hotkey.
+
+STT environment variables:
+- `CLICKY_STT_LOCALE` (default: `en-US`)
